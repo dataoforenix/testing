@@ -1,0 +1,123 @@
+import uuid6
+from datetime import datetime, timezone
+from sqlalchemy import Column, String, text, CheckConstraint, ForeignKey, Integer, Numeric, DateTime
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.orm import relationship, Mapped, mapped_column
+from typing import Optional, List, Dict, Any
+import string
+import random
+
+from app.adapters.db.base import Base
+
+def generate_uuid7():
+    return uuid6.uuid7()
+
+def generate_public_code(length=8):
+    characters = string.ascii_uppercase + string.digits
+    return ''.join(random.choice(characters) for _ in range(length))
+
+class Deal(Base):
+    __tablename__ = "deals"
+
+    id: Mapped[uuid6.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=generate_uuid7)
+    public_code: Mapped[str] = mapped_column(String, unique=True, index=True, default=generate_public_code)
+    org_id: Mapped[uuid6.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id"))
+    seller_user_id: Mapped[Optional[uuid6.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    buyer_user_id: Mapped[Optional[uuid6.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String, default="JOD", server_default="JOD")
+    status: Mapped[str] = mapped_column(String, default="draft", server_default="draft")
+    
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    fulfillment_mode: Mapped[str] = mapped_column(String, default="standard", server_default="standard")
+    
+    fee_bps: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # MVP product policy: buyer always pays Theqa Protection Fee. Seller receives full item price.
+    fee_payer: Mapped[str] = mapped_column(String, default="buyer", server_default="buyer")
+    
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("TIMEZONE('utc', CURRENT_TIMESTAMP)")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), 
+        server_default=text("TIMEZONE('utc', CURRENT_TIMESTAMP)"),
+        onupdate=lambda: datetime.now(timezone.utc)
+    )
+
+    events: Mapped[List["DealEvent"]] = relationship("DealEvent", back_populates="deal", cascade="all, delete-orphan")
+    participants: Mapped[List["DealParticipant"]] = relationship("DealParticipant", back_populates="deal", cascade="all, delete-orphan")
+
+    __mapper_args__ = {
+        "version_id_col": version
+    }
+
+    def compute_fee_amount(self) -> float:
+        """Theqa Protection Fee (orchestration) — remitted via the licensed escrow partner on release."""
+        return float(self.amount) * (self.fee_bps / 10000.0)
+
+    def compute_net_amount(self) -> float:
+        """Seller receives the full item price. Buyer pays the Protection Fee on top."""
+        return float(self.amount)
+
+    def compute_buyer_total(self) -> float:
+        """Total the buyer authorizes to the licensed escrow partner (item + Protection Fee)."""
+        return float(self.amount) + self.compute_fee_amount()
+
+    def compute_item_minor(self) -> int:
+        return int(round(float(self.amount) * 100))
+
+    def compute_fee_minor(self) -> int:
+        return int(round(self.compute_item_minor() * self.fee_bps / 10000.0))
+
+    def compute_buyer_total_minor(self) -> int:
+        """Partner hold amount in minor units (not Theqa custody — shadow-tracked only)."""
+        return self.compute_item_minor() + self.compute_fee_minor()
+
+class DealParticipant(Base):
+    __tablename__ = "deal_participants"
+
+    id: Mapped[uuid6.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=generate_uuid7)
+    deal_id: Mapped[uuid6.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("deals.id"))
+    user_id: Mapped[Optional[uuid6.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    org_id: Mapped[Optional[uuid6.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=True)
+    role: Mapped[str] = mapped_column(String, nullable=False) # buyer, seller
+    
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("TIMEZONE('utc', CURRENT_TIMESTAMP)")
+    )
+
+    deal: Mapped["Deal"] = relationship("Deal", back_populates="participants")
+
+class DealEvent(Base):
+    __tablename__ = "deal_events"
+
+    id: Mapped[uuid6.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=generate_uuid7)
+    deal_id: Mapped[uuid6.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("deals.id"))
+    actor_id: Mapped[Optional[uuid6.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    
+    from_state: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    to_state: Mapped[str] = mapped_column(String, nullable=False)
+    
+    metadata_payload: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("TIMEZONE('utc', CURRENT_TIMESTAMP)")
+    )
+
+    deal: Mapped["Deal"] = relationship("Deal", back_populates="events")
+
+class OutboxEvent(Base):
+    __tablename__ = "outbox_events"
+
+    id: Mapped[uuid6.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=generate_uuid7)
+    deal_id: Mapped[uuid6.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("deals.id"))
+    event_type: Mapped[str] = mapped_column(String, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(String, default="pending", server_default="pending")
+    
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("TIMEZONE('utc', CURRENT_TIMESTAMP)")
+    )
