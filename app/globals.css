@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --theqa-navy: #0b1f3a;
+  --theqa-emerald: #10b981;
+  --theqa-canvas: #f8fafc;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply min-h-screen bg-canvas font-sans text-ink antialiased;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 0% -20%, rgba(16, 185, 129, 0.06), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(11, 31, 58, 0.04), transparent 50%);
+}
+
+::selection {
+  background: rgba(16, 185, 129, 0.2);
+  color: #0f172a;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-2xl border border-line bg-surface shadow-card;
+  }
+
+  .panel-hover {
+    @apply panel transition-all duration-300 hover:-translate-y-0.5 hover:border-navy-200 hover:shadow-card-hover;
+  }
+
+  .input-field {
+    @apply w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-ink outline-none transition
+      placeholder:text-ink-dim focus:border-navy-400 focus:ring-4 focus:ring-navy-900/5;
+  }
+
+  .label-field {
+    @apply mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 ease-out
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-900/20 focus-visible:ring-offset-2
+      disabled:cursor-not-allowed disabled:opacity-45;
+  }
+
+  .btn-primary {
+    @apply btn bg-navy-900 text-white shadow-navy hover:bg-navy-800 active:scale-[0.98];
+  }
+
+  .btn-brand {
+    @apply btn bg-brand-600 text-white shadow-brand hover:bg-brand-500 active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply btn border border-line bg-surface text-ink-soft shadow-soft hover:border-navy-200 hover:bg-canvas-muted hover:text-ink;
+  }
+
+  .btn-ghost {
+    @apply btn text-ink-muted hover:bg-canvas-muted hover:text-ink;
+  }
+
+  .btn-danger {
+    @apply btn border border-red-200 bg-red-50 text-red-700 hover:bg-red-100;
+  }
+
+  .mono-value {
+    @apply font-mono text-sm tracking-tight text-navy-900;
+  }
+
+  .sandbox-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700;
+  }
+
+  .section-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-muted;
+  }
+
+  .ai-gradient-border {
+    background: linear-gradient(white, white) padding-box,
+      linear-gradient(135deg, #a7f3d0, #93c5fd, #c4b5fd, #6ee7b7) border-box;
+    border: 1.5px solid transparent;
+  }
+}
